@@ -1,0 +1,33 @@
+# Format TXT alternatif untuk food-keywords.
+# Baris diawali "#" atau "##" = nama kategori (bebas: healthy, unhealthy,
+# neutral, dangerous, atau kategori custom baru misal "allergen").
+# Baris kosong / diawali "//" diabaikan (komentar).
+#
+# Format tiap baris kata kunci:
+#   istilah
+#   istilah | note: keterangan
+#   istilah | note: keterangan | severity: high | minAgeMonths: 12
+#
+# File ini hanya CONTOH tambahan (delta) — akan digabung (merge) dengan
+# food-keywords.json memakai mergeFoodKeywordConfig(), jadi tidak perlu
+# menulis ulang semua kata kunci yang sudah ada.
+
+## unhealthy
+es teh manis
+churros
+kue lapis legit
+minuman soda kemasan | note: Tinggi gula tambahan, minim nutrisi
+
+## healthy
+ikan kembung
+daun kelor | note: Tinggi zat besi, baik untuk cegah stunting
+telur puyuh
+
+## dangerous
+jengkol mentah | note: Sulit dicerna, berpotensi masalah ginjal jika berlebihan | severity: medium
+petai mentah | note: Bisa memicu masalah pencernaan pada anak | severity: low
+susu bantal rusak | note: Kemasan rusak/bocor berisiko kontaminasi | severity: high
+
+## allergen
+udang | note: Alergen umum, pantau reaksi alergi | severity: medium
+kacang tanah | note: Alergen umum pada anak | severity: medium
