@@ -1,106 +1,97 @@
 import { GoogleGenAI } from "@google/genai";
 
-function buildPrompt(body: {
+function buildPrompt(data: {
+  nama: string;
   usia: number;
-  tinggi: number;
   gender: string;
-  status: string;
-  expectedHeight?: number;
-  zScore?: number;
-  nama?: string;
-  makanan?: string;
-  foodFlag?: string;
-  foodNote?: string;
+  makanan: string;
+  tb_u: { z: number; status: string };
+  bb_u: { z: number; status: string };
+  bb_tb: { z: number; status: string };
+  risk_level: string;
+  food_valid: boolean;
 }) {
-  return `Kamu adalah asisten gizi anak yang membantu orang tua mengambil keputusan penting untuk masa depan anaknya.
+  const makananNote = data.food_valid
+    ? data.makanan || "belum diisi"
+    : "⚠️ Makanan mengandung bahan tidak layak (rokok/alkohol/kopi)";
 
-Jawaban kamu harus:
-- Jelas
-- Praktis
-- Langsung bisa dilakukan
-- Tidak menghakimi, tapi tetap jujur
+  return `Kamu adalah asisten gizi anak yang membantu orang tua memahami hasil skrining gizi.
 
-====================
+TUGAS KAMU HANYA:
+- Menjelaskan hasil skrining dengan bahasa sederhana
+- Memberi saran praktis berdasarkan data yang sudah dihitung
 
-DATA ANAK:
-- Usia: ${body.usia} bulan
-- Tinggi: ${body.tinggi} cm
-- Gender: ${body.gender}
-- Status pertumbuhan: ${body.status}
-- Z-score: ${body.zScore?.toFixed(2) || "-"}
-- Estimasi tinggi normal: ${body.expectedHeight?.toFixed(1) || "-"} cm
-- Makanan hari ini: ${body.makanan || "belum diisi"}
-- Ringkasan pola makan: ${body.foodFlag || "-"} (${body.foodNote || "-"})
+JANGAN:
+- Jangan mengubah atau mempertanyakan status gizi yang sudah ditentukan
+- Jangan menghitung ulang Z-score
+- Jangan memberikan diagnosis medis
 
 ====================
 
-TUGAS KAMU:
+DATA SKRINING (sudah dihitung oleh sistem):
 
-Bantu orang tua memahami:
-1. Kondisi anak saat ini
-2. Apakah pola makan sudah membantu atau justru menghambat
-3. Apa yang HARUS dilakukan mulai BESOK
+Nama: ${data.nama || "Anak"}
+Usia: ${data.usia} bulan
+Jenis Kelamin: ${data.gender}
 
-====================
+INDIKATOR GIZI:
+1. TB/U (Tinggi Badan menurut Usia): ${data.tb_u.status} (Z-score: ${data.tb_u.z.toFixed(2)})
+2. BB/U (Berat Badan menurut Usia): ${data.bb_u.status} (Z-score: ${data.bb_u.z.toFixed(2)})
+3. BB/TB (Berat Badan menurut Tinggi): ${data.bb_tb.status} (Z-score: ${data.bb_tb.z.toFixed(2)})
 
-ATURAN PENTING:
+TINGKAT RISIKO: ${data.risk_level}
+- normal = pertumbuhan baik
+- risiko = perlu perhatian
+- serius = perlu intervensi segera
 
-1. WAJIB jelaskan kondisi anak secara spesifik (bandingkan dengan normal).
-2. WAJIB evaluasi makanan (apakah terlalu gula, kurang protein, dll).
-3. JANGAN hanya bilang "gizi seimbang".
-4. WAJIB beri contoh makanan nyata:
-   (telur, ayam, ikan, tempe, buah, dll)
-5. Fokus ke langkah sederhana yang bisa dilakukan orang tua dengan budget terbatas.
-6. Jika ada makanan tinggi gula → jelaskan dampaknya.
-7. Jika stunting → tekankan pentingnya intervensi cepat.
-8. Gunakan bahasa sederhana dan hangat (seperti menjelaskan ke orang tua, bukan dokter ke dokter).
-9. Maksimal 130 kata.
+MAKANAN: ${makananNote}
 
 ====================
 
 FORMAT OUTPUT (WAJIB IKUTI):
 
 [Analisis Kondisi]
-(jelaskan posisi tinggi anak vs normal dengan bahasa sederhana)
+Jelaskan kondisi anak berdasarkan 3 indikator di atas dengan bahasa sederhana. Sebutkan mana yang perlu perhatian.
 
 [Evaluasi Pola Makan]
-(jelaskan apakah makanan membantu atau justru menghambat pertumbuhan)
+Beri evaluasi berdasarkan makanan yang dikonsumsi. Jika ada makanan tidak layak, beri peringatan tegas.
 
 [Saran Praktis]
-- (minimal 3 langkah nyata, spesifik, bisa dilakukan besok)
-- (contoh makanan wajib disebutkan)
+- Minimal 3 langkah nyata yang spesifik
+- Sesuaikan dengan kondisi anak (stunting/normal, risiko/serius)
+- Beri contoh makanan nyata (telur, ikan, tempe, dll)
 
 [Langkah Selanjutnya]
-(apa yang harus dilakukan: posyandu, dokter, atau monitoring)
+Apa yang harus dilakukan: posyandu, dokter, atau monitoring mandiri.
 
 ====================
 
-Jawab langsung tanpa tambahan lain.`;
+Jawab langsung tanpa tambahan lain. Maksimal 130 kata.`;
 }
 
 async function callGemini(
   apiKey: string,
-  body: Parameters<typeof buildPrompt>[0]
+  data: Parameters<typeof buildPrompt>[0]
 ) {
   const ai = new GoogleGenAI({ apiKey });
 
   return ai.interactions.create({
     model: "gemini-3.5-flash",
-    input: buildPrompt(body),
+    input: buildPrompt(data),
   });
 }
 
 export async function POST(req: Request) {
   const fallbackText = `[Analisis Kondisi]
-Data anak menunjukkan perlunya perhatian pada keseimbangan antara pertumbuhan dan pola makan.
+Data skrining menunjukkan perlunya perhatian pada keseimbangan gizi anak.
 
 [Evaluasi Pola Makan]
-Pola makan saat ini belum cukup mendukung pertumbuhan optimal.
+Pola makan saat ini perlu dievaluasi untuk mendukung pertumbuhan optimal.
 
 [Saran Praktis]
 - Tambahkan telur atau tempe setiap hari
-- Kurangi minuman manis dan makanan ringan
-- Berikan buah seperti pisang atau pepaya
+- Kurangi makanan manis dan minuman kemasan
+- Berikan buah segar seperti pisang atau pepaya
 
 [Langkah Selanjutnya]
 Pantau pertumbuhan secara rutin dan konsultasi ke posyandu jika ragu.`;

@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { Info, Send, Users } from "lucide-react";
-import { checkStunting, type StuntingResult } from "@/lib/stunting";
+import { checkStunting, type NutritionResult } from "@/lib/stunting";
 import { getFoodFlag, type FoodFlagResult } from "@/lib/food-flag";
 import { ResultCard } from "@/components/result-card";
 
@@ -13,6 +13,7 @@ interface FormState {
   usia: string;
   gender: Gender;
   tinggi: string;
+  berat: string;
   makanan: string;
 }
 
@@ -20,6 +21,7 @@ interface FormErrors {
   usia?: string;
   gender?: string;
   tinggi?: string;
+  berat?: string;
 }
 
 const initialState: FormState = {
@@ -27,13 +29,14 @@ const initialState: FormState = {
   usia: "",
   gender: "",
   tinggi: "",
+  berat: "",
   makanan: "",
 };
 
 export function CalculatorForm() {
   const [form, setForm] = useState<FormState>(initialState);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [result, setResult] = useState<StuntingResult | null>(null);
+  const [result, setResult] = useState<NutritionResult | null>(null);
   const [foodFlag, setFoodFlag] = useState<FoodFlagResult | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [aiText, setAiText] = useState("");
@@ -41,7 +44,7 @@ export function CalculatorForm() {
   const [detailRequested, setDetailRequested] = useState(false);
 
   const canSubmit = useMemo(() => {
-    return form.usia !== "" && form.gender !== "" && form.tinggi !== "";
+    return form.usia !== "" && form.gender !== "" && form.tinggi !== "" && form.berat !== "";
   }, [form]);
 
   function handleChange(field: keyof FormState, value: string) {
@@ -52,9 +55,10 @@ export function CalculatorForm() {
     const nextErrors: FormErrors = {};
     const usia = Number(form.usia);
     const tinggi = Number(form.tinggi);
+    const berat = Number(form.berat);
 
-    if (!form.usia || Number.isNaN(usia) || usia < 0 || usia > 60) {
-      nextErrors.usia = "Usia harus di antara 0-60 bulan.";
+    if (!form.usia || Number.isNaN(usia) || usia <= 0 || usia > 60) {
+      nextErrors.usia = "Usia harus di antara 1-60 bulan.";
     }
 
     if (!form.gender) {
@@ -63,6 +67,10 @@ export function CalculatorForm() {
 
     if (!form.tinggi || Number.isNaN(tinggi) || tinggi <= 0 || tinggi > 140) {
       nextErrors.tinggi = "Masukkan tinggi/panjang badan yang valid.";
+    }
+
+    if (!form.berat || Number.isNaN(berat) || berat <= 0 || berat > 50) {
+      nextErrors.berat = "Masukkan berat badan yang valid.";
     }
 
     setErrors(nextErrors);
@@ -84,8 +92,9 @@ export function CalculatorForm() {
 
     const usia = Number(form.usia);
     const tinggi = Number(form.tinggi);
-    const computed = checkStunting(usia, tinggi);
-    const flag = getFoodFlag(computed.status, form.makanan);
+    const berat = Number(form.berat);
+    const computed = checkStunting(usia, tinggi, berat, form.gender, form.makanan);
+    const flag = getFoodFlag(computed.status, form.makanan, usia);
 
     setResult(computed);
     setFoodFlag(flag);
@@ -109,16 +118,15 @@ export function CalculatorForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          usia: Number(form.usia),
-          tinggi: Number(form.tinggi),
-          gender: form.gender,
-          status: result.status,
-          expectedHeight: result.expectedHeight,
-          zScore: result.zScore,
           nama: form.nama,
+          usia: Number(form.usia),
+          gender: form.gender,
           makanan: form.makanan,
-          foodFlag: foodFlag?.label,
-          foodNote: foodFlag?.note,
+          tb_u: result.tb_u,
+          bb_u: result.bb_u,
+          bb_tb: result.bb_tb,
+          risk_level: result.risk_level,
+          food_valid: result.food_valid,
         }),
       });
 
@@ -163,7 +171,7 @@ export function CalculatorForm() {
         <div>
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-800">
             <label htmlFor="usia">Usia</label>
-            <span className="text-xs font-normal text-slate-400">(bulan, 0-60)</span>
+            <span className="text-xs font-normal text-slate-400">(bulan, 1-60)</span>
             <span className="group relative inline-flex items-center text-slate-400">
               <Info className="h-4 w-4" />
               <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-52 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-normal leading-5 text-white opacity-0 shadow-lg transition group-hover:opacity-100">
@@ -174,9 +182,9 @@ export function CalculatorForm() {
           <input
             id="usia"
             type="number"
-            min="0"
+            min="1"
             max="60"
-            placeholder="0 - 60 bulan"
+            placeholder="1 - 60 bulan"
             value={form.usia}
             onChange={(event) => handleChange("usia", event.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
@@ -230,6 +238,31 @@ export function CalculatorForm() {
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
           />
           {errors.tinggi ? <p className="mt-2 text-xs text-rose-600">{errors.tinggi}</p> : null}
+        </div>
+
+        <div>
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <label htmlFor="berat">Berat Badan</label>
+            <span className="text-xs font-normal text-slate-400">(kg)</span>
+            <span className="group relative inline-flex items-center text-slate-400">
+              <Info className="h-4 w-4" />
+              <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-normal leading-5 text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+                Gunakan berat badan dalam kilogram dengan angka desimal jika perlu.
+              </span>
+            </span>
+          </div>
+          <input
+            id="berat"
+            type="number"
+            min="0"
+            max="50"
+            step="0.1"
+            placeholder="Contoh: 8.5"
+            value={form.berat}
+            onChange={(event) => handleChange("berat", event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+          />
+          {errors.berat ? <p className="mt-2 text-xs text-rose-600">{errors.berat}</p> : null}
         </div>
 
         <div>

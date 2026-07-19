@@ -1,5 +1,5 @@
 import defaultConfigJson from "./food-keywords.json";
-export type FoodTone = "good" | "warning" | "neutral" | "danger";
+export type FoodTone = "good" | "warning" | "neutral" | "danger" | "light";
 
 export interface FoodFlagResult {
   label: string;
@@ -7,12 +7,22 @@ export interface FoodFlagResult {
   tone: FoodTone;
   matchedKeywords?: Record<string, string[]>;
   scores?: Record<string, number>;
+  // Additional structured data for UI alerts
+  alerts?: FoodAlert[];
+}
+
+export interface FoodAlert {
+  type: "allergen" | "high_sodium" | "high_sugar" | "dangerous" | "fortified" | "unhealthy" | "neutral" | "healthy";
+  label: string;
+  items: string[];
+  severity: "low" | "medium" | "high";
 }
 
 interface KeywordEntry {
   term: string;
   note?: string;
   severity?: "low" | "medium" | "high";
+  minAgeMonths?: number;
   aliases?: string[];
 }
 
@@ -58,7 +68,6 @@ function normalizeKeywordInput(input: string | KeywordEntry): KeywordEntry {
   if (typeof input === "string") {
     return { term: input.trim().toLowerCase() };
   }
-
   return {
     ...input,
     term: input.term.trim().toLowerCase(),
@@ -85,15 +94,18 @@ interface CategoryMatch {
 
 function scanCategory(normalizedText: string, cat: FoodCategoryConfig): CategoryMatch {
   const matched: KeywordEntry[] = [];
-
   for (const kw of cat.keywords) {
     const terms = [kw.term, ...(kw.aliases ?? [])];
     if (terms.some((term) => matchesKeyword(normalizedText, term))) {
       matched.push(kw);
     }
   }
-
   return { score: matched.length, matched };
+}
+
+/** Strip trailing period from a string to avoid double-dot formatting */
+function stripTrailingPeriod(s: string): string {
+  return s.replace(/\.+$/, "");
 }
 
 class FoodFlagEngine {
@@ -105,9 +117,100 @@ class FoodFlagEngine {
     this.thresholds = { ...DEFAULT_THRESHOLDS, ...config.thresholds };
   }
 
-  /** Pick a random element from an array */
   private pick<T>(arr: T[]): T {
     return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  /**
+   * Check if a keyword is age-appropriate for the child
+   * If minAgeMonths is set and child is younger, it's NOT appropriate (filter out)
+   * If minAgeMonths is not set, it's always appropriate
+   */
+  private isKeywordAgeAppropriate(kw: KeywordEntry, childAge: number): boolean {
+    if (!kw.minAgeMonths) return true;
+    return childAge >= kw.minAgeMonths;
+  }
+
+  /** Build structured alerts from all categories (respecting age filters) */
+  private buildAlerts(
+    matchedKeywords: Record<string, string[]>,
+    normalized: string,
+    childAge: number,
+  ): FoodAlert[] {
+    const alerts: FoodAlert[] = [];
+
+    // --- Allergen alerts ---
+    const allergenHits = (this.config.categories.allergen?.keywords ?? []).filter((kw) =>
+      [kw.term, ...(kw.aliases ?? [])].some((term) => matchesKeyword(normalized, term)),
+    );
+    if (allergenHits.length > 0) {
+      const severity = allergenHits.some((kw) => kw.severity === "high") ? "high"
+        : allergenHits.some((kw) => kw.severity === "medium") ? "medium" : "low";
+      alerts.push({
+        type: "allergen",
+        label: "Potensi Alergen",
+        items: allergenHits.map((kw) => kw.term),
+        severity,
+      });
+    }
+
+    // --- High Sodium alerts ---
+    const sodiumHits = (this.config.categories.high_sodium?.keywords ?? []).filter((kw) =>
+      [kw.term, ...(kw.aliases ?? [])].some((term) => matchesKeyword(normalized, term)),
+    );
+    if (sodiumHits.length > 0) {
+      alerts.push({
+        type: "high_sodium",
+        label: "Tinggi Natrium",
+        items: sodiumHits.map((kw) => kw.term),
+        severity: "medium",
+      });
+    }
+
+    // --- High Sugar (unhealthy category) alerts ---
+    const sugarHits = (this.config.categories.unhealthy?.keywords ?? []).filter((kw) =>
+      [kw.term, ...(kw.aliases ?? [])].some((term) => matchesKeyword(normalized, term)),
+    );
+    if (sugarHits.length > 0) {
+      alerts.push({
+        type: "high_sugar",
+        label: "Tinggi Gula / Rendah Nutrisi",
+        items: sugarHits.map((kw) => kw.term),
+        severity: "medium",
+      });
+    }
+
+    // --- Dangerous alerts (age-filtered: only show if child is BELOW minAge) ---
+    const dangerHits = (this.config.categories.dangerous?.keywords ?? []).filter((kw) => {
+      const matches = [kw.term, ...(kw.aliases ?? [])].some((term) => matchesKeyword(normalized, term));
+      if (!matches) return false;
+      // Only flag if child is below the minimum age for this item
+      if (kw.minAgeMonths && childAge >= kw.minAgeMonths) return false;
+      return true;
+    });
+    if (dangerHits.length > 0) {
+      alerts.push({
+        type: "dangerous",
+        label: "Berbahaya",
+        items: dangerHits.map((kw) => kw.term),
+        severity: "high",
+      });
+    }
+
+    // --- Fortified alerts ---
+    const fortifiedHits = (this.config.categories.fortified?.keywords ?? []).filter((kw) =>
+      [kw.term, ...(kw.aliases ?? [])].some((term) => matchesKeyword(normalized, term)),
+    );
+    if (fortifiedHits.length > 0) {
+      alerts.push({
+        type: "fortified",
+        label: "Difortifikasi",
+        items: fortifiedHits.map((kw) => kw.term),
+        severity: "low",
+      });
+    }
+
+    return alerts;
   }
 
   /** Build rich supplementary notes from allergen + high_sodium + fortified categories */
@@ -124,15 +227,14 @@ class FoodFlagEngine {
     if (allergenHits.length > 0) {
       const items = allergenHits.map((kw) => {
         const severity = kw.severity ? ` (${kw.severity})` : "";
-        const note = kw.note ? `: ${kw.note}` : "";
+        const note = kw.note ? `: ${stripTrailingPeriod(kw.note)}` : "";
         return `${kw.term}${severity}${note}`;
       });
       if (allergenHits.length === 1) {
-        parts.push(`⚠️ Potensi alergen: ${items[0]}.`);
+        parts.push(`\u26A0\uFE0F Potensi alergen: ${items[0]}.`);
       } else {
-        parts.push(`⚠️ Beberapa potensi alergen terdeteksi: ${items.join("; ")}.`);
+        parts.push(`\u26A0\uFE0F Beberapa potensi alergen terdeteksi: ${items.join("; ")}.`);
       }
-      // Add a random caution message
       const cautionMessages = [
         "Perkenalkan satu per satu untuk memantau reaksi.",
         "Pantau gejala alergi seperti ruam, gatal, atau sesak napas.",
@@ -149,9 +251,9 @@ class FoodFlagEngine {
     if (sodiumHits.length > 0) {
       const names = sodiumHits.map((kw) => kw.term);
       if (sodiumHits.length === 1) {
-        parts.push(`🧂 ${names[0]} tergolong tinggi natrium. Batasi konsumsi agar tidak membebani ginjal anak.`);
+        parts.push(`\uD83E\uDDC2 ${names[0]} tergolong tinggi natrium. Batasi konsumsi agar tidak membebani ginjal anak.`);
       } else {
-        parts.push(`🧂 Beberapa makanan tinggi natrium: ${names.join(", ")}. Sebaiknya kurangi frekuensinya.`);
+        parts.push(`\uD83E\uDDC2 Beberapa makanan tinggi natrium: ${names.join(", ")}. Sebaiknya kurangi frekuensinya.`);
       }
     }
 
@@ -162,9 +264,9 @@ class FoodFlagEngine {
     if (fortifiedHits.length > 0) {
       const names = fortifiedHits.map((kw) => kw.term);
       if (fortifiedHits.length === 1) {
-        parts.push(`✅ ${names[0]} diperkaya zat gizi mikro. Pilihan yang baik untuk mendukung pertumbuhan.`);
+        parts.push(`\u2705 ${names[0]} diperkaya zat gizi mikro. Pilihan yang baik untuk mendukung pertumbuhan.`);
       } else {
-        parts.push(`✅ Terdapat makanan fortifikasi: ${names.join(", ")}. Kandungan gizi mikronya membantu cegah stunting.`);
+        parts.push(`\u2705 Terdapat makanan fortifikasi: ${names.join(", ")}. Kandungan gizi mikronya membantu cegah stunting.`);
       }
     }
 
@@ -172,8 +274,24 @@ class FoodFlagEngine {
     return "\n\n" + parts.join("\n");
   }
 
-  analyze(status: string, makanan: string): FoodFlagResult {
+  /**
+   * Get age-filtered dangerous items (only those where child is BELOW minAgeMonths)
+   */
+  private getActiveDangerousItems(normalized: string, childAge: number): KeywordEntry[] {
+    return (this.config.categories.dangerous?.keywords ?? []).filter((keyword) => {
+      const matches = [keyword.term, ...(keyword.aliases ?? [])].some((term) =>
+        matchesKeyword(normalized, term)
+      );
+      if (!matches) return false;
+      // Only flag if child is below the minimum age for this item
+      if (keyword.minAgeMonths && childAge >= keyword.minAgeMonths) return false;
+      return true;
+    });
+  }
+
+  analyze(status: string, makanan: string, usia?: number): FoodFlagResult {
     const normalized = normalizeText(makanan);
+    const childAge = usia ?? 60;
 
     if (!normalized) {
       const emptyNotes = [
@@ -200,20 +318,27 @@ class FoodFlagEngine {
     const healthyScore = scores.healthy ?? 0;
     const unhealthyScore = scores.unhealthy ?? 0;
     const neutralScore = scores.neutral ?? 0;
-    const dangerousScore = scores.dangerous ?? 0;
 
-    // --- Dangerous overrides everything ---
+    // Calculate dangerous score ONLY for age-appropriate items
+    const activeDangerous = this.getActiveDangerousItems(normalized, childAge);
+    const dangerousScore = activeDangerous.length;
+
+    // Build structured alerts (age-filtered inside buildAlerts)
+    const alerts = this.buildAlerts(matchedKeywords, normalized, childAge);
+
+    // --- Dangerous overrides everything (age-filtered) ---
     if (dangerousScore > 0) {
-      const dangerousItems = (this.config.categories.dangerous?.keywords ?? [])
-        .filter((keyword) =>
-          [keyword.term, ...(keyword.aliases ?? [])].some((term) => matchesKeyword(normalized, term))
-        )
-        .map((keyword) => (keyword.note ? `${keyword.term} (${keyword.note})` : keyword.term));
-      const labels = status === "stunting" ? "Berbahaya — perlu segera dihindari" : "Berbahaya";
+      const dangerousItems = activeDangerous
+        .map((keyword) =>
+          keyword.note
+            ? `${keyword.term} (${stripTrailingPeriod(keyword.note)})`
+            : keyword.term
+        );
+      const labels = status === "stunting" ? "Berbahaya \u2014 perlu segera dihindari" : "Berbahaya";
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
       const notes = [
         `Terdeteksi item berisiko: ${dangerousItems.join("; ")}. Segera hentikan pemberian makanan ini.`,
-        `⚠️ ${dangerousItems.join("; ")} — makanan ini tidak aman untuk anak. Konsultasi ke dokter jika sudah terlanjur dikonsumsi.`,
+        `\u26A0\uFE0F ${dangerousItems.join("; ")} \u2014 makanan ini tidak aman untuk anak. Konsultasi ke dokter jika sudah terlanjur dikonsumsi.`,
         `Bahaya! ${dangerousItems.join("; ")}. Jangan diberikan lagi kepada anak dalam kondisi apa pun.`,
       ];
       return {
@@ -222,6 +347,7 @@ class FoodFlagEngine {
         tone: "danger",
         matchedKeywords,
         scores,
+        alerts,
       };
     }
 
@@ -229,18 +355,26 @@ class FoodFlagEngine {
     if (unhealthyScore >= this.thresholds.unhealthyDominantMin && healthyScore === 0) {
       const labels = status === "stunting" ? "Sangat tidak mendukung" : "Tidak sehat";
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
-      const notes = [
-        "Didominasi gula/kalori kosong, minim nutrisi penting. Kurangi makanan manis dan ganti dengan protein serta sayur.",
-        "Terlalu banyak makanan tinggi gula dan minim gizi. Anak butuh protein hewani dan nabati untuk tumbuh.",
-        `Pola makan ini kekurangan protein dan kelebihan gula. Tambahkan telur, ikan, atau tahu/tempe.`,
-        "Gula berlebih menghambat penyerapan nutrisi penting. Batasi camilan manis dan beri buah segar sebagai gantinya.",
+      const stuntingNotes = [
+        "Didominasi gula, minim protein. Stunting butuh protein hewani setiap hari.",
+        "Terlalu banyak makanan manis, anak stunting butuh protein, bukan gula.",
+        "Gula berlebih menghambat penyerapan gizi. Kurangi manis, tambah protein.",
+        "Pola makan ini tidak mendukung kejar tumbuh. Ganti camilan dengan protein.",
       ];
+      const normalNotes = [
+        "Didominasi gula/kalori kosong. Kurangi manis, ganti dengan protein & sayur.",
+        "Terlalu banyak gula, minim gizi. Anak butuh protein hewani dan nabati.",
+        "Kelebihan gula, kurang nutrisi. Tambahkan telur, ikan, dan sayur setiap hari.",
+        "Gula berlebih hambat penyerapan nutrisi. Batasi manis, perbanyak protein.",
+      ];
+      const notes = status === "stunting" ? stuntingNotes : normalNotes;
       return {
         label: labels,
         note: this.pick(notes) + suffix,
         tone: "warning",
         matchedKeywords,
         scores,
+        alerts,
       };
     }
 
@@ -251,18 +385,26 @@ class FoodFlagEngine {
         stunting: "Stunting & pola makan lemah",
       };
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
-      const notes = [
-        "Ada makanan bergizi, tapi tertutup oleh gula atau makanan rendah nutrisi. Tingkatkan porsi protein dan kurangi camilan kemasan.",
-        "Campuran makanan baik dan kurang baik. Perbanyak protein hewani, kurangi minuman manis.",
-        "Sudah ada beberapa sumber gizi, tapi masih ada 'kalori kosong' yang bisa menghambat pertumbuhan optimal.",
-        "Langkah positif sudah ada, namun makanan tinggi gula bisa menekan manfaat gizinya. Evaluasi ulang menu harian.",
+      const stuntingNotes = [
+        "Ada protein, tapi tertutup gula. Tingkatkan protein hewani untuk kejar tumbuh.",
+        "Gizi campuran, dominasi gula kurangi manfaat protein. Perbanyak lauk hewani.",
+        "Sumber gizi ada, namun gula berlebih hambat penyerapan. Kurangi manis.",
+        "Sudah ada protein, tapi gula tinggi kurangi efektivitasnya. Evaluasi menu.",
       ];
+      const normalNotes = [
+        "Campuran baik & kurang baik. Perbanyak protein, kurangi minuman manis.",
+        "Ada gizi, tapi tertutup gula. Tingkatkan porsi protein, kurangi camilan.",
+        "Positif sudah ada, namun gula bisa hambat pertumbuhan. Kurangi manis.",
+        "Gizi cukup, tapi gula berlebih. Evaluasi menu, perbanyak sayur & protein.",
+      ];
+      const notes = status === "stunting" ? stuntingNotes : normalNotes;
       return {
         label: labels[status] || "Normal tapi berisiko",
         note: this.pick(notes) + suffix,
         tone: "warning",
         matchedKeywords,
         scores,
+        alerts,
       };
     }
 
@@ -270,21 +412,30 @@ class FoodFlagEngine {
     if (healthyScore >= this.thresholds.healthyDominantMin && unhealthyScore === 0) {
       const labels: Record<string, string> = {
         normal: "Baik",
-        stunting: "Cukup baik (perlu ditingkatkan)",
+        stunting: "Cukup baik, namun perlu ditingkatkan",
       };
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
-      const notes = [
-        "Sudah ada protein dan nutrisi penting untuk pertumbuhan. Lanjutkan dan variasikan sumber proteinnya.",
-        "Menu mengandung zat gizi penting. Pertahankan dan tambahkan variasi sayur serta buah untuk hasil optimal.",
-        `Kandungan protein cukup baik. Untuk hasil maksimal, pastikan juga ada sayuran dan sumber zat besi.`,
-        "Pola makan sudah mendukung pertumbuhan. Jaga konsistensi dan tambahkan variasi sumber vitamin.",
+      const stuntingNotes = [
+        "Protein sudah ada, namun anak stunting butuh lebih banyak protein hewani setiap hari.",
+        "Gizi cukup, tapi penambahan protein hewani tetap prioritas untuk kejar pertumbuhan.",
+        "Sudah ada zat gizi, tingkatkan frekuensi protein, sayur, dan sumber zat besi.",
+        "Pola makan cukup, namun untuk stunting perlu tambahan sumber protein & vitamin.",
       ];
+      const normalNotes = [
+        "Menu bergizi, pertahankan dan variasikan sumber protein & sayur.",
+        "Pola makan sudah baik, jaga konsistensi dengan variasi buah dan protein.",
+        "Gizi seimbang sudah terpenuhi, teruskan dan tambah variasi sumber vitamin.",
+        "Kandungan protein dan gizi mikro baik. Pertahankan pola makan ini.",
+      ];
+      const notes = status === "stunting" ? stuntingNotes : normalNotes;
+      const tone: FoodTone = status === "stunting" ? "light" : "good";
       return {
         label: labels[status] || "Baik",
         note: this.pick(notes) + suffix,
-        tone: "good",
+        tone,
         matchedKeywords,
         scores,
+        alerts,
       };
     }
 
@@ -295,18 +446,26 @@ class FoodFlagEngine {
         stunting: "Kurang mendukung",
       };
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
-      const notes = [
-        "Makanan ada, tapi belum cukup mendukung pertumbuhan optimal. Tambahkan sumber protein seperti telur, ayam, atau kacang-kacangan.",
-        "Menu ini perlu diperkuat dengan protein dan vitamin. Coba tambahkan ikan, tahu, atau sayuran berwarna.",
-        "Kalori tercukupi, tapi gizi mikro masih kurang. Perkaya dengan hati ayam, daun kelor, atau kacang hijau.",
-        "Makanan cenderung netral. Untuk pertumbuhan maksimal, pastikan ada sumber protein dan zat besi setiap hari.",
+      const stuntingNotes = [
+        "Makanan belum cukup protein. Tambah telur, ikan, atau hati ayam setiap hari.",
+        "Gizi belum optimal. Fokus pada protein hewani dan sayur untuk kejar tumbuh.",
+        "Kalori ada, tapi gizi mikro kurang. Perbanyak protein, sayur, dan buah.",
+        "Kurang sumber zat besi & protein. Prioritaskan lauk hewani di setiap makan.",
       ];
+      const normalNotes = [
+        "Makanan masih kurang protein. Tambahkan telur, ikan, atau tempe setiap hari.",
+        "Perlu diversifikasi. Tambah protein dan sayur untuk gizi optimal.",
+        "Kalori cukup, tapi gizi mikro perlu ditingkatkan. Perbanyak sayur dan lauk.",
+        "Menu perlu diperkuat. Pastikan ada protein dan sayur setiap kali makan.",
+      ];
+      const notes = status === "stunting" ? stuntingNotes : normalNotes;
       return {
         label: labels[status] || "Kurang kuat",
         note: this.pick(notes) + suffix,
         tone: "warning",
         matchedKeywords,
         scores,
+        alerts,
       };
     }
 
@@ -314,10 +473,10 @@ class FoodFlagEngine {
     if (status === "stunting" && healthyScore === 0) {
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
       const notes = [
-        "Belum ada sumber protein penting untuk mengejar pertumbuhan. Segera tambahkan telur, hati ayam, atau ikan setiap hari.",
-        "Anak dalam kondisi stunting tapi belum ada asupan protein yang cukup. Intervensi gizi harus segera dilakukan.",
-        "Prioritas utama: berikan protein hewani setiap hari. Telur, ikan, dan hati ayam adalah pilihan terbaik untuk kejar tumbuh.",
-        "Tanpa protein yang cukup, pertumbuhan sulit dikejar. Mulai besok, pastikan ada lauk hewani di setiap porsi makan.",
+        "Belum ada protein hewani. Segera tambah telur, hati ayam, atau ikan setiap hari.",
+        "Stunting tanpa protein. Intervensi gizi harus segera: telur, ikan, hati ayam.",
+        "Prioritas utama: protein hewani setiap hari untuk kejar pertumbuhan.",
+        "Tanpa protein, pertumbuhan sulit dikejar. Pastikan lauk hewani setiap makan.",
       ];
       return {
         label: "Perlu intervensi",
@@ -325,6 +484,7 @@ class FoodFlagEngine {
         tone: "warning",
         matchedKeywords,
         scores,
+        alerts,
       };
     }
 
@@ -332,10 +492,10 @@ class FoodFlagEngine {
     if (status === "normal" && healthyScore === 0) {
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
       const notes = [
-        "Belum terlihat makanan yang kuat mendukung tumbuh kembang. Tambahkan telur, ikan, atau sayur mayur ke menu harian.",
-        "Meski tinggi badan normal, pola makan ini kurang gizi. Jaga agar anak tidak kekurangan protein dan vitamin.",
-        "Pertumbuhan saat ini normal, tapi untuk jangka panjang perlu asupan gizi yang lebih baik. Variasikan menu dengan protein dan sayur.",
-        "Ini saat yang tepat untuk membangun kebiasaan makan sehat. Perkenalkan protein, sayur, dan buah sejak dini.",
+        "Belum ada sumber protein kuat. Tambahkan telur, ikan, atau tahu setiap hari.",
+        "Pola makan kurang gizi meski tinggi normal. Jaga asupan protein dan vitamin.",
+        "Saatnya bangun kebiasaan sehat. Perkenalkan protein, sayur, dan buah sejak dini.",
+        "Untuk jangka panjang, perlu gizi lebih baik. Variasikan menu dengan protein.",
       ];
       return {
         label: "Perlu dibenahi",
@@ -343,10 +503,11 @@ class FoodFlagEngine {
         tone: "warning",
         matchedKeywords,
         scores,
+        alerts,
       };
     }
 
-    // --- Fallback — build label from what IS matched ---
+    // --- Fallback
     {
       const labels: Record<string, string> = {
         normal: "Cukup",
@@ -361,12 +522,10 @@ class FoodFlagEngine {
         }
       }
 
-      // Build context-aware fallback label
       let fallbackLabel: string;
       const suffix = this.buildSupplementaryNotes(matchedKeywords, normalized);
 
       if (matchedCats.length > 0) {
-        // Has some category matches (allergen/high_sodium/fortified) but no primary
         if (matchedCats.includes("fortified")) {
           fallbackLabel = status === "stunting" ? "Ada gizi tambahan" : "Fortifikasi terdeteksi";
         } else if (matchedCats.includes("allergen") && matchedCats.includes("high_sodium")) {
@@ -379,22 +538,29 @@ class FoodFlagEngine {
           fallbackLabel = labels[status] || "Cukup";
         }
       } else {
-        // Truly nothing matched
         fallbackLabel = labels[status] || "Cukup";
       }
 
-      const notes = [
-        "Pola makan belum optimal, perlu variasi dan peningkatan kualitas gizi. Pastikan ada protein, sayur, dan buah setiap hari.",
-        "Perlu diversifikasi menu. Tambahkan variasi sumber protein dan sayuran untuk mendukung pertumbuhan optimal.",
-        "Kualitas gizi masih bisa ditingkatkan. Fokus pada protein hewani, sayuran hijau, dan sumber zat besi.",
-        "Menu anak perlu diperkaya. Coba kombinasikan lauk hewani, nabati, dan sayuran dalam satu piring.",
+      const stuntingNotes = [
+        "Perlu variasi menu dengan protein hewani, sayur, dan buah untuk kejar tumbuh.",
+        "Tambah variasi protein hewani setiap hari untuk dukung pertumbuhan.",
+        "Fokus pada protein hewani, sayuran hijau, dan sumber zat besi.",
+        "Kombinasikan lauk hewani, nabati, dan sayur dalam satu piring setiap hari.",
       ];
+      const normalNotes = [
+        "Perlu variasi menu. Pastikan ada protein, sayur, dan buah setiap hari.",
+        "Tambah variasi sumber protein dan sayuran untuk gizi optimal.",
+        "Tingkatkan kualitas gizi dengan protein hewani dan sayuran hijau.",
+        "Kombinasikan lauk hewani, nabati, dan sayur dalam satu piring.",
+      ];
+      const notes = status === "stunting" ? stuntingNotes : normalNotes;
       return {
         label: fallbackLabel,
         note: this.pick(notes) + suffix,
         tone: "warning",
         matchedKeywords,
         scores,
+        alerts,
       };
     }
   }
@@ -402,8 +568,8 @@ class FoodFlagEngine {
 
 const defaultEngine = new FoodFlagEngine(loadFoodKeywordConfig(defaultConfigJson as FoodKeywordConfig));
 
-export function getFoodFlag(status: string, makanan: string): FoodFlagResult {
-  return defaultEngine.analyze(status, makanan);
+export function getFoodFlag(status: string, makanan: string, usia?: number): FoodFlagResult {
+  return defaultEngine.analyze(status, makanan, usia);
 }
 
 export { FoodFlagEngine };
