@@ -99,16 +99,27 @@ Pantau pertumbuhan secara rutin dan konsultasi ke posyandu jika ragu.`;
   try {
     const body = await req.json();
 
+    // ============================================================
+    // Collect all Gemini API keys from environment variables
+    // Picks one randomly each request to distribute billing evenly
+    // across multiple API keys (avoids hitting a single key's quota)
+    // ============================================================
     const keys = [
       process.env.GEMINI_API_KEY,
       process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+      process.env.GEMINI_API_KEY_4,
     ].filter(Boolean) as string[];
 
     if (keys.length === 0) {
       return Response.json({ text: fallbackText });
     }
 
-    for (const apiKey of keys) {
+    // Try keys in random order — shuffle a copy so the same key isn't
+    // always first (spreads API usage across all available keys)
+    const shuffled = [...keys].sort(() => Math.random() - 0.5);
+
+    for (const apiKey of shuffled) {
       try {
         const interaction = await callGemini(apiKey, body);
 
