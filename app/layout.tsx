@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import "@/styles/globals.css";
 
 // ============================================================
@@ -12,9 +13,6 @@ const SITE_DESCRIPTION =
 const OG_IMAGE = "/og-image.png";
 
 export const metadata: Metadata = {
-  // ============================================================
-  // SEO: metadataBase required for resolving OG/Twitter image URLs
-  // ============================================================
   metadataBase: new URL(SITE_URL),
 
   title: {
@@ -23,16 +21,10 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
 
-  // ============================================================
-  // SEO: Canonical URL prevents duplicate content issues
-  // ============================================================
   alternates: {
     canonical: SITE_URL,
   },
 
-  // ============================================================
-  // SEO: Open Graph tags (Facebook, LinkedIn, etc.)
-  // ============================================================
   openGraph: {
     type: "website",
     locale: "id_ID",
@@ -50,9 +42,6 @@ export const metadata: Metadata = {
     ],
   },
 
-  // ============================================================
-  // SEO: Twitter Card metadata
-  // ============================================================
   twitter: {
     card: "summary_large_image",
     title: SITE_NAME,
@@ -60,17 +49,11 @@ export const metadata: Metadata = {
     images: [OG_IMAGE],
   },
 
-  // ============================================================
-  // SEO: Icons / Favicon
-  // ============================================================
   icons: {
     icon: "/kkn-logo.png",
     apple: "/kkn-logo.png",
   },
 
-  // ============================================================
-  // SEO: Allow indexing in production, noindex disabled
-  // ============================================================
   robots: {
     index: true,
     follow: true,
@@ -93,7 +76,7 @@ export default function RootLayout({
       <head>
         {/* ============================================================ */}
         {/* SEO: JSON-LD Structured Data (Schema.org)                    */}
-        {/* WebSite + Organization schema for search engine enrichment   */}
+        {/* WebSite + Organization + BreadcrumbList schema              */}
         {/* ============================================================ */}
         <script
           type="application/ld+json"
@@ -121,6 +104,13 @@ export default function RootLayout({
                     },
                     description:
                       "Posyandu digital untuk skrining stunting anak di Desa Candiareng, Kecamatan Warungasem, Kabupaten Batang, Provinsi Jawa Tengah.",
+                    address: {
+                      "@type": "PostalAddress",
+                      addressLocality: "Desa Candiareng",
+                      addressRegion: "Jawa Tengah",
+                      postalCode: "51252",
+                      addressCountry: "ID",
+                    },
                   },
                 },
                 {
@@ -145,7 +135,63 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body className="flex min-h-screen flex-col">
+        <div className="flex-1">{children}</div>
+
+        {/* ============================================================ */}
+        {/* SEO: Global site footer with internal links across all pages */}
+        {/* ============================================================ */}
+        <footer className="border-t border-slate-200 bg-white/80">
+          <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Brand */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">Posyandu Digital</h3>
+                <p className="text-xs leading-6 text-slate-600">
+                  Alat skrining stunting berbasis standar WHO untuk deteksi dini gangguan pertumbuhan anak balita di Indonesia.
+                </p>
+              </div>
+
+              {/* Informasi */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">Informasi</h3>
+                <ul className="space-y-2 text-xs text-slate-600">
+                  <li><Link href="/apa-itu-stunting" className="underline hover:text-emerald-600 transition-colors">Apa Itu Stunting?</Link></li>
+                  <li><Link href="/cara-menghitung-z-score" className="underline hover:text-emerald-600 transition-colors">Cara Menghitung Z-Score</Link></li>
+                  <li><Link href="/tinggi-badan-ideal-anak" className="underline hover:text-emerald-600 transition-colors">Tinggi Badan Ideal Anak</Link></li>
+                  <li><Link href="/faq-stunting" className="underline hover:text-emerald-600 transition-colors">FAQ Seputar Stunting</Link></li>
+                </ul>
+              </div>
+
+              {/* Blog */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">Artikel</h3>
+                <ul className="space-y-2 text-xs text-slate-600">
+                  <li><Link href="/blog/ciri-ciri-anak-stunting" className="underline hover:text-emerald-600 transition-colors">Ciri-Ciri Anak Stunting</Link></li>
+                  <li><Link href="/blog/makanan-bergizi-anak-1-3-tahun" className="underline hover:text-emerald-600 transition-colors">Makanan Bergizi 1–3 Tahun</Link></li>
+                  <li><Link href="/blog/berat-badan-ideal-bayi-balita" className="underline hover:text-emerald-600 transition-colors">Berat Badan Ideal Bayi</Link></li>
+                </ul>
+              </div>
+
+              {/* Referensi */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">Referensi</h3>
+                <ul className="space-y-2 text-xs text-slate-600">
+                  <li><a href="https://www.who.int/tools/child-growth-standards/standards" target="_blank" rel="noopener noreferrer" className="underline hover:text-emerald-600 transition-colors">Standar WHO</a></li>
+                  <li><a href="https://p2ptm.kemkes.go.id/" target="_blank" rel="noopener noreferrer" className="underline hover:text-emerald-600 transition-colors">Kemenkes RI</a></li>
+                  <li><Link href="/" className="underline hover:text-emerald-600 transition-colors">Beranda</Link></li>
+                  <li><Link href="/sitemap.xml" className="underline hover:text-emerald-600 transition-colors">Sitemap</Link></li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-8 border-t border-slate-200 pt-6 text-center text-xs text-slate-500">
+              <p>&copy; {new Date().getFullYear()} Posyandu Digital — Desa Candiareng, Kec. Warungasem, Kab. Batang, Jawa Tengah.</p>
+              <p className="mt-1">Alat skrining ini bersifat edukatif dan tidak menggantikan konsultasi medis profesional.</p>
+            </div>
+          </div>
+        </footer>
+      </body>
     </html>
   );
 }
