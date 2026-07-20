@@ -60,23 +60,23 @@ function FoodNote({ note }: { note: string }) {
 function RiskBadge({ risk_level }: { risk_level: string }) {
   if (risk_level === "serius") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-        <AlertTriangle className="h-3 w-3" />
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700" aria-label="Tingkat risiko: serius">
+        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
         Serius
       </span>
     );
   }
   if (risk_level === "risiko") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-        <AlertTriangle className="h-3 w-3" />
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700" aria-label="Tingkat risiko: risiko">
+        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
         Risiko
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-      <BadgeCheck className="h-3 w-3" />
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700" aria-label="Tingkat risiko: normal">
+      <BadgeCheck className="h-3 w-3" aria-hidden="true" />
       Normal
     </span>
   );
@@ -94,10 +94,16 @@ function IndicatorCard({
   const isSangat = result.status.startsWith("Sangat");
   const isBad = isSangat || result.status === "Pendek" || result.status === "Kurang" || result.status === "Kurus" || result.status === "Gemuk" || result.status === "Lebih";
 
+  const statusLabel = `${label}: ${result.status} (Z-score: ${result.z.toFixed(2)})`;
+
   return (
-    <div className={`rounded-2xl p-4 ${isSangat ? "bg-red-50 ring-1 ring-red-200" : isBad ? "bg-amber-50 ring-1 ring-amber-200" : "bg-emerald-50 ring-1 ring-emerald-200"}`}>
+    <div
+      className={`rounded-2xl p-4 ${isSangat ? "bg-red-50 ring-1 ring-red-200" : isBad ? "bg-amber-50 ring-1 ring-amber-200" : "bg-emerald-50 ring-1 ring-emerald-200"}`}
+      aria-label={statusLabel}
+      role="region"
+    >
       <div className="flex items-center gap-2">
-        <div className={`${isSangat ? "text-red-500" : isBad ? "text-amber-500" : "text-emerald-500"}`}>
+        <div className={`${isSangat ? "text-red-500" : isBad ? "text-amber-500" : "text-emerald-500"}`} aria-hidden="true">
           {icon}
         </div>
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
@@ -122,7 +128,7 @@ function AlertBadge({ alert }: { alert: FoodAlert }) {
   };
   const c = cfg[alert.type] || cfg.allergen;
   return (
-    <span className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.bg} ${c.text}`}>
+    <span className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.bg} ${c.text}`} aria-label={`Peringatan: ${c.label}`}>
       {c.label}: {alert.items.length}
     </span>
   );
@@ -137,7 +143,7 @@ function getStuntingDescription(tb_u: { z: number; status: string }): string {
 export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, detailRequested, onRequestDetail }: ResultCardProps) {
   if (!submitted || !result) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-500">
+      <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-500" role="status" aria-label="Hasil skrining belum tersedia">
         Hasil skrining akan muncul di sini setelah formulir dikirim.
       </div>
     );
@@ -147,17 +153,18 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
   const stuntingLabel = getStuntingDescription(result.tb_u);
 
   return (
-    <div
+    <section
       className={`fade-in-up rounded-3xl border p-5 shadow-soft ${
         isStunting
           ? "border-orange-200 bg-gradient-to-br from-orange-50 to-rose-50"
           : "border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50"
       }`}
+      aria-label="Hasil skrining status gizi anak"
     >
       {/* Input Warning */}
       {result.input_warning && (
-        <div className="mb-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="mb-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>{result.input_warning}</p>
         </div>
       )}
@@ -168,6 +175,7 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
           className={`rounded-2xl p-3 ${
             isStunting ? "bg-orange-100 text-orange-600" : "bg-emerald-100 text-emerald-600"
           }`}
+          aria-hidden="true"
         >
           {isStunting ? <CircleAlert className="h-6 w-6" /> : <BadgeCheck className="h-6 w-6" />}
         </div>
@@ -184,7 +192,7 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
       </div>
 
       {/* Three Indicators */}
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-3" role="group" aria-label="Indikator gizi anak">
         <IndicatorCard label="TB/U" result={result.tb_u} icon={<Ruler className="h-4 w-4" />} />
         <IndicatorCard label="BB/U" result={result.bb_u} icon={<Weight className="h-4 w-4" />} />
         <IndicatorCard label="BB/TB" result={result.bb_tb} icon={<Baby className="h-4 w-4" />} />
@@ -192,8 +200,8 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
 
       {/* Food Validation Warning */}
       {!result.food_valid && (
-        <div className="mt-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="mt-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div>
             <p className="font-semibold">Makanan Tidak Layak</p>
             <p className="mt-1">Makanan mengandung bahan tidak layak (rokok/alkohol/kopi). Segera hentikan pemberian dan konsultasi ke dokter.</p>
@@ -202,56 +210,56 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
       )}
 
       {/* Recommendations */}
-      <div className="mt-5 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
+      <section className="mt-5 grid gap-3 text-sm text-slate-700 sm:grid-cols-2" aria-label="Rekomendasi">
         {isStunting ? (
           <>
-            <div className="rounded-2xl bg-white/80 p-4">
-              <p className="font-semibold text-orange-700">Rekomendasi utama</p>
+            <article className="rounded-2xl bg-white/80 p-4">
+              <h4 className="font-semibold text-orange-700">Rekomendasi utama</h4>
               <ul className="mt-2 space-y-1.5 text-slate-600">
                 <li>&bull; Tingkatkan protein hewani (telur, ikan, hati ayam)</li>
                 <li>&bull; Ikuti Posyandu rutin setiap bulan</li>
                 <li>&bull; Konsultasi dokter untuk evaluasi lanjutan</li>
                 <li>&bull; Pantau pertumbuhan dengan KMS atau aplikasi</li>
               </ul>
-            </div>
-            <div className="rounded-2xl bg-white/80 p-4">
-              <p className="font-semibold text-slate-900">Catatan cepat</p>
+            </article>
+            <article className="rounded-2xl bg-white/80 p-4">
+              <h4 className="font-semibold text-slate-900">Catatan cepat</h4>
               <p className="mt-2 text-slate-600">
                 Hasil ini adalah skrining awal. Dibutuhkan penilaian lanjutan untuk memastikan status gizi anak.
                 {result.risk_level === "serius" && " Segera konsultasi ke tenaga kesehatan."}
               </p>
-            </div>
+            </article>
           </>
         ) : (
           <>
-            <div className="rounded-2xl bg-white/80 p-4">
-              <p className="font-semibold text-emerald-700">Pesan utama</p>
+            <article className="rounded-2xl bg-white/80 p-4">
+              <h4 className="font-semibold text-emerald-700">Pesan utama</h4>
               <ul className="mt-2 space-y-1.5 text-slate-600">
                 <li>&bull; Pertahankan gizi seimbang</li>
                 <li>&bull; Lakukan monitoring berkala setiap bulan</li>
                 {result.risk_level === "risiko" && <li>&bull; Perhatikan indikator yang perlu perhatian</li>}
               </ul>
-            </div>
-            <div className="rounded-2xl bg-white/80 p-4">
-              <p className="font-semibold text-slate-900">Lanjutkan kebiasaan baik</p>
+            </article>
+            <article className="rounded-2xl bg-white/80 p-4">
+              <h4 className="font-semibold text-slate-900">Lanjutkan kebiasaan baik</h4>
               <p className="mt-2 text-slate-600">
                 Pertahankan pola makan sehat, imunisasi, dan pemantauan tumbuh kembang sesuai jadwal.
               </p>
-            </div>
+            </article>
           </>
         )}
-      </div>
+      </section>
 
       {/* Food Evaluation (with inline alerts) */}
-      <div className="mt-4 rounded-2xl bg-white/85 p-4">
+      <section className="mt-4 rounded-2xl bg-white/85 p-4" aria-label="Evaluasi makanan">
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Salad className="h-4 w-4 text-emerald-600" />
-          Evaluasi Makanan
+          <Salad className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <h4>Evaluasi Makanan</h4>
         </div>
 
         {/* Alert badges inside evaluasi */}
         {foodFlag?.alerts && foodFlag.alerts.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Peringatan makanan">
             {foodFlag.alerts.map((alert, i) => (
               <AlertBadge key={`${alert.type}-${i}`} alert={alert} />
             ))}
@@ -288,19 +296,19 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
           <div className="mt-2 space-y-1">
             {foodFlag.alerts.map((alert, i) => (
               <div key={`detail-${alert.type}-${i}`} className="flex items-start gap-1.5 text-xs text-slate-600">
-                <span className="mt-0.5 shrink-0">-</span>
+                <span className="mt-0.5 shrink-0" aria-hidden="true">-</span>
                 <span><strong>{alert.label}:</strong> {alert.items.join(", ")}</span>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* AI Detail Saran */}
-      <div className="mt-4 rounded-2xl bg-white/85 p-4">
+      <section className="mt-4 rounded-2xl bg-white/85 p-4" aria-label="Detail saran AI">
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Utensils className="h-4 w-4 text-sky-500" />
-          Detail Saran
+          <Utensils className="h-4 w-4 text-sky-500" aria-hidden="true" />
+          <h4>Detail Saran</h4>
         </div>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-600">
@@ -311,24 +319,26 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
             type="button"
             onClick={onRequestDetail}
             disabled={loadingAi}
+            aria-busy={loadingAi}
+            aria-label={loadingAi ? "Memuat detail saran..." : "Dapatkan detail saran"}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {loadingAi ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+            {loadingAi ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
             {loadingAi ? "Membuat detail..." : "Detail Saran"}
           </button>
         </div>
 
         <div className="mt-3 min-h-[72px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
           {loadingAi ? (
-            <div className="flex items-center gap-2 text-slate-500">
-              <LoaderCircle className="h-4 w-4 animate-spin" />
+            <div className="flex items-center gap-2 text-slate-500" role="status">
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
               Mengambil saran kesehatan dari server...
             </div>
           ) : aiText ? (
             <div className="space-y-3 text-slate-700">
               {splitSections(aiText).map((section) => (
                 <div key={section.title} className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-                  <p className="mb-2 text-sm font-semibold text-slate-900">{section.title}</p>
+                  <h5 className="mb-2 text-sm font-semibold text-slate-900">{section.title}</h5>
                   <div
                     className="text-sm leading-6 text-slate-700"
                     dangerouslySetInnerHTML={{ __html: renderBold(section.content) }}
@@ -337,23 +347,23 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
               ))}
             </div>
           ) : detailRequested ? (
-            <div className="flex items-center gap-2 text-slate-500">
-              <FileText className="h-4 w-4" />
+            <div className="flex items-center gap-2 text-slate-500" role="status">
+              <FileText className="h-4 w-4" aria-hidden="true" />
               Detail saran sudah diproses.
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-slate-500">
-              <FileText className="h-4 w-4" />
+            <div className="flex items-center gap-2 text-slate-500" role="status">
+              <FileText className="h-4 w-4" aria-hidden="true" />
               Saran detail akan muncul setelah tombol ditekan.
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>Ini hanya skrining awal, bukan diagnosis medis. Referensi: Permenkes No. 2 Tahun 2020.</p>
       </div>
-    </div>
+    </section>
   );
 }

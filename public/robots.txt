@@ -1,0 +1,9 @@
+# ============================================================
+# SEO: Robots.txt — allow all crawlers to index the site
+# ============================================================
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://posyandu-digital-cerdas.vercel.app/sitemap.xml

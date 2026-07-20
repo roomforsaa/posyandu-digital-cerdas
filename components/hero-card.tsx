@@ -3,12 +3,15 @@ import { Baby, HeartPulse, Sparkles } from "lucide-react";
 
 export function HeroCard() {
   return (
-    <section className="glass-card soft-ring relative overflow-hidden rounded-3xl border border-white/70 shadow-soft">
+    <article className="glass-card soft-ring relative overflow-hidden rounded-3xl border border-white/70 shadow-soft">
+      {/* ============================================================ */}
+      {/* SEO: semantic <article> with proper heading hierarchy          */}
+      {/* ============================================================ */}
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 via-teal-500 to-sky-400" />
       <div className="relative flex flex-col gap-6 p-5 text-white sm:p-8 lg:flex-row lg:items-center">
         <div className="flex-1">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/16 px-3 py-1 text-sm font-medium backdrop-blur-sm">
-            <Sparkles className="h-4 w-4" />
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
             Deteksi dini berbasis WHO
           </div>
           <h2 className="max-w-xl text-2xl font-bold leading-tight sm:text-3xl">
@@ -21,14 +24,14 @@ export function HeroCard() {
           <div className="mt-5 flex flex-wrap gap-3">
             <div className="flex-1 rounded-2xl bg-white/15 px-4 py-3 backdrop-blur-sm">
               <div className="flex items-center gap-2 text-sm font-semibold">
-                <Baby className="h-4 w-4" />
-                Usia 0-60 bulan
+                <Baby className="h-4 w-4" aria-hidden="true" />
+                Usia 0–60 bulan
               </div>
               <p className="mt-1 text-xs text-white/80">Dirancang untuk skrining awal anak balita.</p>
             </div>
             <div className="flex-1 rounded-2xl bg-white/15 px-4 py-3 backdrop-blur-sm">
               <div className="flex items-center gap-2 text-sm font-semibold">
-                <HeartPulse className="h-4 w-4" />
+                <HeartPulse className="h-4 w-4" aria-hidden="true" />
                 Hasil langsung
               </div>
               <p className="mt-1 text-xs text-white/80">Status, rekomendasi, dan saran AI muncul setelah submit.</p>
@@ -40,7 +43,7 @@ export function HeroCard() {
           <div className="relative w-full rounded-2xl bg-white/20 p-3 backdrop-blur-sm sm:p-4">
             <Image
               src="/child-health.svg"
-              alt="Ilustrasi anak sehat"
+              alt="Ilustrasi anak sehat — skrining stunting anak posyandu digital"
               width={1166}
               height={896}
               priority
@@ -48,7 +51,7 @@ export function HeroCard() {
             />
             <Image
               src="/logo.png"
-              alt="Logo"
+              alt="Logo Posyandu Digital — Skrining Stunting Anak Cerdas"
               width={80}
               height={80}
               className="absolute bottom-6 left-6 h-12 w-12 rounded-xl object-cover shadow-xl sm:h-16 sm:w-16"
@@ -56,6 +59,6 @@ export function HeroCard() {
           </div>
         </div>
       </div>
-    </section>
+    </article>
   );
 }
