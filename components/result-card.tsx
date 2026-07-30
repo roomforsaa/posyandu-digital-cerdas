@@ -1,4 +1,5 @@
-import { BadgeCheck, CircleAlert, LoaderCircle, ShieldAlert, FileText, Wand2, Salad, Utensils, AlertTriangle, Baby, Weight, Ruler } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BadgeCheck, CircleAlert, LoaderCircle, ShieldAlert, FileText, Wand2, Salad, Utensils, AlertTriangle, Baby, Weight, Ruler, Clock } from "lucide-react";
 import type { NutritionResult } from "@/lib/stunting";
 import type { FoodFlagResult, FoodAlert } from "@/lib/food-flag";
 
@@ -140,7 +141,67 @@ function getStuntingDescription(tb_u: { z: number; status: string }): string {
   return "Normal";
 }
 
+const COOLDOWN_KEY = "ai-detail-cooldown";
+const COOLDOWN_MS = 120_000; // 2 minutes
+
 export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, detailRequested, onRequestDetail }: ResultCardProps) {
+  const [cooldownUntil, setCooldownUntil] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(COOLDOWN_KEY);
+      if (stored) {
+        const parsed = parseInt(stored, 10);
+        if (parsed > Date.now()) return parsed;
+      }
+    }
+    return 0;
+  });
+
+  const [remaining, setRemaining] = useState(0);
+  const [slotInfo, setSlotInfo] = useState<{ used: number; total: number } | null>(null);
+
+  // Fetch slot info on mount
+  useEffect(() => {
+    fetch("/api/ai")
+      .then((res) => res.json())
+      .then((data) => setSlotInfo(data))
+      .catch(() => {});
+  }, []);
+
+  // Re-fetch slot info when cooldown starts (a new request was made)
+  useEffect(() => {
+    if (cooldownUntil > Date.now()) {
+      fetch("/api/ai")
+        .then((res) => res.json())
+        .then((data) => setSlotInfo(data))
+        .catch(() => {});
+    }
+  }, [cooldownUntil]);
+
+  useEffect(() => {
+    let rafId: number;
+    function tick() {
+      const left = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setRemaining(left);
+      if (left > 0) {
+        rafId = requestAnimationFrame(tick);
+      }
+    }
+    if (cooldownUntil > Date.now()) {
+      rafId = requestAnimationFrame(tick);
+    } else {
+      setRemaining(0);
+    }
+    return () => cancelAnimationFrame(rafId);
+  }, [cooldownUntil]);
+
+  function handleDetailClick() {
+    const until = Date.now() + COOLDOWN_MS;
+    localStorage.setItem(COOLDOWN_KEY, String(until));
+    setCooldownUntil(until);
+    onRequestDetail();
+  }
+
+  const isCoolingDown = remaining > 0;
   if (!submitted || !result) {
     return (
       <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-500" role="status" aria-label="Hasil skrining belum tersedia">
@@ -315,17 +376,33 @@ export function ResultCard({ result, foodFlag, aiText, loadingAi, submitted, det
             Klik tombol di bawah untuk mendapatkan saran makanan yang lebih detail berdasarkan hasil skrining dan
             makanan yang sudah dikonsumsi.
           </p>
-          <button
-            type="button"
-            onClick={onRequestDetail}
-            disabled={loadingAi}
-            aria-busy={loadingAi}
-            aria-label={loadingAi ? "Memuat detail saran..." : "Dapatkan detail saran"}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loadingAi ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
-            {loadingAi ? "Membuat detail..." : "Detail Saran"}
-          </button>
+          <div className="flex flex-col items-center gap-1.5">
+            {isCoolingDown && (
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                Tunggu {remaining}s · {slotInfo ? `${slotInfo.used}/${slotInfo.total} slot` : '...'}
+              </div>
+            )}
+            {!isCoolingDown && slotInfo && (
+              <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                {slotInfo.total - slotInfo.used}/{slotInfo.total} slot tersedia
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleDetailClick}
+              disabled={loadingAi || isCoolingDown}
+              aria-busy={loadingAi}
+              aria-label={loadingAi ? "Memuat detail saran..." : isCoolingDown ? `Tunggu ${remaining} detik` : "Dapatkan detail saran"}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loadingAi ? (
+                <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> Membuat detail...</>
+              ) : (
+                <><Wand2 className="h-4 w-4" aria-hidden="true" /> Detail Saran</>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="mt-3 min-h-[72px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
